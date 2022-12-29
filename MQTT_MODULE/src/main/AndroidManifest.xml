@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!--mqtt-->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.INTERNET"/>
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <application>
+    <service android:name="org.eclipse.paho.android.service.MqttService" />
+    <service android:name="com.example.mqtt_module.mqtt_conn.MqttService" />
+</application>
+</manifest>

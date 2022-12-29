@@ -4,8 +4,19 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    tools:context=".views.BluetoothConfigureActivity">
-
+    tools:context=".views.DeviceConfigureActivity">
+    <TextView
+        android:id="@+id/tv"
+        android:layout_width="wrap_content"
+        android:layout_height="50dp"
+        android:text="GET SKEY"
+        android:textColor="@color/white"
+        android:gravity="center"
+        android:background="@color/black"
+        app:layout_constraintLeft_toLeftOf="parent"
+        app:layout_constraintRight_toRightOf="parent"
+        app:layout_constraintBottom_toTopOf="@+id/tv1"
+        app:layout_constraintTop_toTopOf="parent" />
     <TextView
         android:id="@+id/tv1"
         android:layout_width="wrap_content"

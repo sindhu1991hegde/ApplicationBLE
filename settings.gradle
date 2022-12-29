@@ -15,3 +15,5 @@ dependencyResolutionManagement {
 rootProject.name = "ApplicationBLE"
 include ':app'
 include ':BLE_MODULE'
+include ':MQTT_MODULE'
+include ':Common_lib'

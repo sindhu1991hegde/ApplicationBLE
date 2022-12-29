@@ -26,7 +26,7 @@ import android.widget.Toast;
 
 import androidx.annotation.Nullable;
 
-import com.poc.bluetooth_ble.util.AppConstants;
+import com.example.common_lib.AppConstants;
 import com.poc.bluetooth_ble.util.Base64Hex;
 import com.poc.bluetooth_ble.util.Encrypt;
 
@@ -160,6 +160,7 @@ public class BluetoothServiceClass extends Service {
                 String rawData = setCharData(characteristic);
                 displayData(rawData);
 
+
             }
 
            /* if (status == BluetoothGatt.GATT_SUCCESS) {
@@ -262,7 +263,7 @@ public class BluetoothServiceClass extends Service {
 
 
                 }
-
+                Log.e("SINDHU res from BLE",updateStringData);
 
                 broadcastUpdate(ACTION_DATA_AVAILABLE,updateStringData);
             }
@@ -468,6 +469,7 @@ public class BluetoothServiceClass extends Service {
     public BluetoothDevice getDevice(BluetoothDevice device, String connectDevice) {
 
         if (device.getName() != null) {
+
             if (device.getName().startsWith(connectDevice)) {
                    stopLE();
                 AppConstants.BLUETOOTH_DEVICE = device;
@@ -485,6 +487,7 @@ public class BluetoothServiceClass extends Service {
            {
                AppConstants.BLUETOOTH_DEVICE = device1;
                mDeviceAddres= device1.getAddress();
+               Log.e("SINDHU DEV", AppConstants.BLUETOOTH_DEVICE+"");
                unpairDevice(AppConstants.BLUETOOTH_DEVICE);
                connect(mDeviceAddres);
 

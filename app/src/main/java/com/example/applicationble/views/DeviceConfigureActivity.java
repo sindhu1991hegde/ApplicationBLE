@@ -16,6 +16,8 @@ import android.content.ServiceConnection;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.IBinder;
+import android.os.Looper;
+import android.util.Log;
 import android.view.View;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -26,16 +28,29 @@ import androidx.core.app.ActivityCompat;
 
 import com.example.applicationble.R;
 
+import com.example.applicationble.views.AppUtil.APIExecutor;
+import com.example.applicationble.views.AppUtil.Status;
+import com.example.common_lib.AppConstants;
+import com.example.mqtt_module.mqtt_conn.MqttService;
+import com.example.mqtt_module.mqtt_conn.SessionManager;
 import com.poc.bluetooth_ble.service.BluetoothServiceClass;
-import com.poc.bluetooth_ble.util.AppConstants;
 import com.poc.bluetooth_ble.util.Utils;
 
+import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
-public class BluetoothConfigureActivity extends AppCompatActivity {
+import retrofit2.Call;
+import retrofit2.Callback;
+import retrofit2.Response;
 
-    TextView tv1,tv2,tv3,tv4;
+public class DeviceConfigureActivity extends AppCompatActivity {
+
+    /*MQTT*/
+    SessionManager sessionManager;
+    MqttService mqttService;
+    /*----*/
+    TextView tv1,tv2,tv3,tv4,tv;
     private boolean notNowCheck = false;
     BluetoothAdapter mBluetoothAdapter;
     private static final int RQS_ENABLE_BLUETOOTH = 123;
@@ -56,7 +71,7 @@ public class BluetoothConfigureActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_bluetoothconfigure);
-
+        tv = (TextView) findViewById(R.id.tv);
         tv1 = (TextView) findViewById(R.id.tv1);
         tv2 = (TextView) findViewById(R.id.tv2);
         tv3 = (TextView) findViewById(R.id.tv3);
@@ -66,51 +81,24 @@ public class BluetoothConfigureActivity extends AppCompatActivity {
         tv4.setText("Device Status");
         //request permission
         if (!Utils.hasPermissions(getApplicationContext(), PERMISSIONS)) {
-            ActivityCompat.requestPermissions(BluetoothConfigureActivity.this, PERMISSIONS, PERMISSION_ALL);
+            ActivityCompat.requestPermissions(DeviceConfigureActivity.this, PERMISSIONS, PERMISSION_ALL);
         }
         else {
             mBluetoothLeService.closeGatt();
             startBluetooth();
         }
 
+        tv.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                mBluetoothLeService.sendToBLEJsonUpateData(AppConstants.GET_SKEY);
+            }
+        });
+
         tv1.setOnClickListener(new View.OnClickListener() {
             @SuppressLint("MissingPermission")
             @Override
             public void onClick(View view) {
-
-                //mattress
-            /*    name_password = new StringBuilder();
-                name_password.append("{\"");
-                name_password.append("CMD\":");
-                name_password.append("\"IOT+CMD=21,");
-                name_password.append(ssidLength + ",");
-                name_password.append(spinTxt + ",");
-                name_password.append(passwordLength + ",");
-                name_password.append(password.trim() + "~" + "\"}");
-
-                sendToBLEJsonUpateData("{\"CMD\":\"IOT+CMD=24~\"}");
-
-                //{"SKEY":"2NK14BD621000002","MAC":"000000000000"}
-
-                if (updateStringData.contains("{\"SKEY\"")) {
-                    bleWiFICounter = 5;
-                    if (notNowCheck == false) sendToBLEJsonUpateData(name_password.toString());
-
-                    new Handler(Looper.getMainLooper()).postDelayed(new Runnable() {
-                        @Override
-                        public void run() {
-                            try {
-                                JSONObject jsonObject = new JSONObject(updateStringData);
-                                AppConstants.MATTRESS_S_KEY = jsonObject.getString("SKEY");
-                                AppConstants.MATTRESS_MAC_ID = jsonObject.getString("MAC");
-                                //  gotoDeviceDetails();
-                            } catch (JSONException e) {
-                                e.printStackTrace();
-                            }
-                        }
-                    }, 2000);
-                }*/
-
                 String ssidLength = "";
                 String passwordLength = "";
                 String spinTxt = "Radiant_Dev";
@@ -149,7 +137,12 @@ public class BluetoothConfigureActivity extends AppCompatActivity {
             @SuppressLint("MissingPermission")
             @Override
             public void onClick(View view) {
-                mBluetoothLeService.sendToBLEJsonUpateData(AppConstants.COMMAND_AIR_POWER_ON);
+                if( AppConstants.BLUETOOTH_DEVICE != null && Utils.isConnected(AppConstants.BLUETOOTH_DEVICE)) {
+                    mBluetoothLeService.sendToBLEJsonUpateData(AppConstants.COMMAND_AIR_POWER_ON);
+                }
+                else {
+                    mqttService.commandControl(AppConstants.MATRRESS_ON, getApplicationContext());
+                }
 
             }
         });
@@ -157,10 +150,11 @@ public class BluetoothConfigureActivity extends AppCompatActivity {
         tv3.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                startActivity(new Intent(BluetoothConfigureActivity.this, BluetoothActionActivity.class));
+                startActivity(new Intent(DeviceConfigureActivity.this, BluetoothActionActivity.class));
 
             }
         });
+
 
     }
 
@@ -226,22 +220,64 @@ public class BluetoothConfigureActivity extends AppCompatActivity {
     @Override
     protected void onResume() {
         super.onResume();
-        deviceName = "LIV-ARP";
+        deviceName = "LIV - MATTRESS";
         try {
             Intent gattServiceIntent = new Intent(this, BluetoothServiceClass.class);
             gattServiceIntent.putExtra("DEVICE",deviceName);
             bindService(gattServiceIntent, mServiceConnection, BIND_AUTO_CREATE);
         } catch (Exception e) {
         }
-        registerReceiver(gattUpdateReceiver, makeGattUpdateIntentFilter());
+        sessionManager = new SessionManager(DeviceConfigureActivity.this);
+        callCertificateApi();
+    }
+    private final ServiceConnection mServiceConnection1 = new ServiceConnection() {
+        @Override
+        public void onServiceConnected(ComponentName componentName, IBinder iBinder) {
+            mqttService = ((MqttService.LocalBinder) iBinder).getService();
+            mqttService.mqttConnection(DeviceConfigureActivity.this);
+            Log.e("SINDHU", "mservice");
+
+        }
+
+        @Override
+        public void onServiceDisconnected(ComponentName componentName) {
+
+        }
+    };
+    private void callCertificateApi() {
+        Call<Status> call = APIExecutor.getApiServiceWithHeader(getApplicationContext()).getMqttCertificates();
+        call.enqueue(new Callback<Status>() {
+            @Override
+            public void onResponse(Call<Status> call, Response<Status> response) {
+
+                if (response.body() != null) {
+                    Status response1 = response.body();
+                    Log.e("responsecert", response1.getStatus());
+                    if (response1.getStatus().equalsIgnoreCase("success")) {
+
+                        sessionManager.storeCertificate(response1.getData().getCertificates().getCaCrt(), response1.getData().getCertificates().getClientCrt(), response1.getData().getCertificates().getClientKey());
+
+                        Intent serviceIntent = new Intent(DeviceConfigureActivity.this, MqttService.class);
+                        bindService(serviceIntent, mServiceConnection1, BIND_AUTO_CREATE);
+                        registerReceiver(gattUpdateReceiver, makeGattUpdateIntentFilter());
+
+                    }
+                }
+            }
+
+            @Override
+            public void onFailure(Call<Status> call, Throwable t) {
+
+            }
+        });
 
     }
-
     private static IntentFilter makeGattUpdateIntentFilter() {
         final IntentFilter intentFilter = new IntentFilter();
         intentFilter.addAction(BluetoothServiceClass.ACTION_GATT_CONNECTED);
         intentFilter.addAction(ACTION_GATT_DISCONNECTED);
         intentFilter.addAction(ACTION_DATA_AVAILABLE);
+        intentFilter.addAction(MqttService.ACTION);
         return intentFilter;
     }
 
@@ -258,23 +294,15 @@ public class BluetoothConfigureActivity extends AppCompatActivity {
             }else if(ACTION_DATA_AVAILABLE.equals(action))
             {
                 displayData=intent.getStringExtra(AppConstants.EXTRA_DATA);
-                try {
-                    JSONObject json=new JSONObject(displayData);
-                    String json1=json.getString("ST");
-                } catch (JSONException e) {
-                    e.printStackTrace();
-                }
+                updateUI(displayData);
+                Log.e("SINDHU","from BLE");
 
-                String[]  st=displayData.split(",");
-
-                if(st[1].equalsIgnoreCase("1"))
-                {
-                    tv4.setText("Device status: ON");
-                }
-                else
-                {
-                    tv4.setText("Device status: OFF");
-                }
+            }
+            else if(mqttService.ACTION.equals(action))
+            {
+                displayData = intent.getStringExtra("action");
+                updateUI(displayData);
+                Log.e("SINDHU","from MQTT");
 
             }
         }
@@ -285,6 +313,55 @@ public class BluetoothConfigureActivity extends AppCompatActivity {
     protected void onDestroy() {
         super.onDestroy();
         unregisterReceiver(gattUpdateReceiver);
+    }
+
+    private void updateUI(String displayData)
+    {
+        try {
+            JSONObject json = new JSONObject(displayData);
+
+            if(json.has("WV")) {
+
+                String[] wifiVersion = json.getString("WV").split(",");
+
+                JSONArray jsonArray = json.getJSONArray("ST");
+
+                JSONObject jsonRightMattress = jsonArray.getJSONObject(0);
+                String[] rightMattress = jsonRightMattress.getString("RT").split(",");
+                AppConstants.MATTRESS_RIGHT_POWER = rightMattress[0];
+                if(AppConstants.MATTRESS_RIGHT_POWER.equalsIgnoreCase("1")) {
+                    tv4.setText("Right Mattress status: ON");
+                }
+                else{
+                    tv4.setText("Right Mattress status: OFF");
+                }
+
+                JSONObject jsonLeftMattress = jsonArray.getJSONObject(1);
+                String[] leftMattress = jsonLeftMattress.getString("LT").split(",");
+
+            }
+            else if (json.has("{\"SKEY\"")) {
+
+                new Handler(Looper.getMainLooper()).postDelayed(new Runnable() {
+                    @Override
+                    public void run() {
+                        try {
+
+                            AppConstants.MATTRESS_S_KEY = json.getString("SKEY");
+                            AppConstants.MATTRESS_MAC_ID = json.getString("MAC");
+
+                            Log.e("SINDHU",   AppConstants.MATTRESS_S_KEY+"=="+   AppConstants.MATTRESS_MAC_ID);
+                            //  gotoDeviceDetails();
+                        } catch (JSONException e) {
+                            e.printStackTrace();
+                        }
+                    }
+                }, 2000);
+            }
+
+        } catch (JSONException e) {
+            e.printStackTrace();
+        }
     }
 
 }
